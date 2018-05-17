@@ -246,7 +246,7 @@ namespace Rollbar
 
         private RollbarResponse Process(Payload payload, RollbarLogger logger)
         {
-            var client = new RollbarClient(logger.Config);
+            var client = RollbarClientLocator.GetClient(logger.Config);
 
             IEnumerable<string> safeScrubFields = logger.Config.GetSafeScrubFields();
 

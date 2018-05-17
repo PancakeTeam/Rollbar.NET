@@ -45,7 +45,7 @@
             var config =
                new RollbarConfig(this._writeAccessToken) { Environment = deployment.Environment, };
 
-            RollbarClient rollbarClient = new RollbarClient(config);
+            RollbarClient rollbarClient = RollbarClientLocator.GetClient(config);
 
             await rollbarClient.PostAsync(deployment);
         }
@@ -61,7 +61,7 @@
             Assumption.AssertNotNullOrWhiteSpace(this._readAccessToken, nameof(this._readAccessToken));
 
             var config = new RollbarConfig(this._readAccessToken);
-            RollbarClient rollbarClient = new RollbarClient(config);
+            RollbarClient rollbarClient = RollbarClientLocator.GetClient(config);
 
             var result = await rollbarClient.GetDeploymentAsync(this._readAccessToken, deploymentID);
 
@@ -79,7 +79,7 @@
             Assumption.AssertNotNullOrWhiteSpace(this._readAccessToken, nameof(this._readAccessToken));
 
             var config = new RollbarConfig(this._readAccessToken);
-            RollbarClient rollbarClient = new RollbarClient(config);
+            RollbarClient rollbarClient = RollbarClientLocator.GetClient(config);
 
             var result = await rollbarClient.GetDeploymentsAsync(this._readAccessToken, pageNumber);
 

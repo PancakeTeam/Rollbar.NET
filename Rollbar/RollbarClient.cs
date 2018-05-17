@@ -1,4 +1,6 @@
-﻿[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("UnitTest.Rollbar")]
+﻿using System.Threading;
+
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("UnitTest.Rollbar")]
 
 namespace Rollbar
 {
@@ -22,8 +24,12 @@ namespace Rollbar
     /// <summary>
     /// Client for accessing the Rollbar API
     /// </summary>
-    internal class RollbarClient 
+    internal class RollbarClient
     {
+        private readonly Lazy<HttpClient> _httpClient;
+
+        private HttpClient HttpClient => _httpClient.Value;
+
         public IRollbarConfig Config { get; }
 
         public RollbarClient(IRollbarConfig config)
@@ -31,6 +37,7 @@ namespace Rollbar
             Assumption.AssertNotNull(config, nameof(config));
 
             Config = config;
+            _httpClient = new Lazy<HttpClient>(BuildWebClient);
         }
 
         public RollbarResponse PostAsJson(Payload payload, IEnumerable<string> scrubFields)
@@ -58,42 +65,29 @@ namespace Rollbar
                     );
             }
 
-            using (var httpClient = this.BuildWebClient())
-            {
-                var jsonData = JsonConvert.SerializeObject(payload);
-                jsonData = ScrubPayload(jsonData, scrubFields);
+            var jsonData = JsonConvert.SerializeObject(payload);
+            jsonData = ScrubPayload(jsonData, scrubFields);
 
-                httpClient.DefaultRequestHeaders
-                    .Add("X-Rollbar-Access-Token", payload.AccessToken);
+            var postPayload = new StringContent(jsonData, Encoding.UTF8, "application/json"); //CONTENT-TYPE header
+            var postRequest = new HttpRequestMessage(HttpMethod.Post, new Uri($"{Config.EndPoint}item/"));
+            postRequest.Content = postPayload;
+            postRequest.Headers.Add("X-Rollbar-Access-Token", payload.AccessToken);
+            postRequest.Headers
+                .Accept
+                .Add(new MediaTypeWithQualityHeaderValue("application/json")); //ACCEPT header
 
-                httpClient.DefaultRequestHeaders
-                    .Accept
-                    .Add(new MediaTypeWithQualityHeaderValue("application/json")); //ACCEPT header
+            var postResponse = await HttpClient.SendAsync(postRequest);
 
-                var postPayload = 
-                    new StringContent(jsonData, Encoding.UTF8, "application/json"); //CONTENT-TYPE header
-                var uri = new Uri($"{Config.EndPoint}item/");
-                var postResponse = await httpClient.PostAsync(uri, postPayload);
+            postResponse.EnsureSuccessStatusCode();
+            string reply = await postResponse.Content.ReadAsStringAsync();
+            RollbarResponse response = JsonConvert.DeserializeObject<RollbarResponse>(reply);
+            response.HttpDetails =
+                $"Response: {postResponse}"
+                + Environment.NewLine
+                + $"Request: {postResponse.RequestMessage}"
+                + Environment.NewLine;
 
-                RollbarResponse response = null;
-                if (postResponse.IsSuccessStatusCode)
-                {
-                    string reply = await postResponse.Content.ReadAsStringAsync();
-                    response = JsonConvert.DeserializeObject<RollbarResponse>(reply);
-                    response.HttpDetails = 
-                        $"Response: {postResponse}" 
-                        + Environment.NewLine 
-                        + $"Request: {postResponse.RequestMessage}" 
-                        + Environment.NewLine
-                        ;
-                }
-                else
-                {
-                    postResponse.EnsureSuccessStatusCode();
-                }
-
-                return response;
-            }
+            return response;
         }
 
         private string ScrubPayload(string payload, IEnumerable<string> scrubFields)
@@ -124,6 +118,8 @@ namespace Rollbar
             {
                 webClient = new HttpClient();
             }
+
+            if (Config.ClientRequestsTimeout.HasValue) webClient.Timeout = Config.ClientRequestsTimeout.Value;
 
             return webClient;
         }
@@ -166,11 +162,8 @@ namespace Rollbar
                 );
 
 
-            using (var httpClient = this.BuildWebClient())
-            {
-                var uri = new Uri(this.Config.EndPoint + RollbarClient.deployApiPath);
-
-                var parameters = new Dictionary<string, string> {
+            var uri = new Uri(this.Config.EndPoint + RollbarClient.deployApiPath);
+            var parameters = new Dictionary<string, string> {
                     { "access_token", this.Config.AccessToken },
                     { "environment", (!string.IsNullOrWhiteSpace(deployment.Environment)) ? deployment.Environment : this.Config.Environment  },
                     { "revision", deployment.Revision },
@@ -178,20 +171,18 @@ namespace Rollbar
                     { "local_username", deployment.LocalUsername },
                     { "comment", deployment.Comment },
                 };
-                var httpContent = new FormUrlEncodedContent(parameters);
-                var postResponse = await httpClient.PostAsync(uri, httpContent);
+            var httpContent = new FormUrlEncodedContent(parameters);
+            var postResponse = await HttpClient.PostAsync(uri, httpContent);
 
-                if (postResponse.IsSuccessStatusCode)
-                {
-                    string reply = await postResponse.Content.ReadAsStringAsync();
-                }
-                else
-                {
-                    postResponse.EnsureSuccessStatusCode();
-                }
-
-                return;
+            if (postResponse.IsSuccessStatusCode)
+            {
+                string reply = await postResponse.Content.ReadAsStringAsync();
             }
+            else
+            {
+                postResponse.EnsureSuccessStatusCode();
+            }
+
         }
 
         /// <summary>
@@ -205,29 +196,26 @@ namespace Rollbar
             Assumption.AssertNotNullOrWhiteSpace(readAccessToken, nameof(readAccessToken));
             Assumption.AssertNotNullOrWhiteSpace(deploymentID, nameof(deploymentID));
 
-            using (var httpClient = this.BuildWebClient())
+            var uri = new Uri(
+                this.Config.EndPoint
+                + RollbarClient.deployApiPath + deploymentID + @"/"
+                + $"?access_token={readAccessToken}"
+                );
+
+            var httpResponse = await HttpClient.GetAsync(uri);
+
+            DeployResponse response = null;
+            if (httpResponse.IsSuccessStatusCode)
             {
-                var uri = new Uri(
-                    this.Config.EndPoint 
-                    + RollbarClient.deployApiPath + deploymentID + @"/" 
-                    + $"?access_token={readAccessToken}"
-                    );
-
-                var httpResponse = await httpClient.GetAsync(uri);
-
-                DeployResponse response = null;
-                if (httpResponse.IsSuccessStatusCode)
-                {
-                    string reply = await httpResponse.Content.ReadAsStringAsync();
-                    response = JsonConvert.DeserializeObject<DeployResponse>(reply);
-                }
-                else
-                {
-                    httpResponse.EnsureSuccessStatusCode();
-                }
-
-                return response;
+                string reply = await httpResponse.Content.ReadAsStringAsync();
+                response = JsonConvert.DeserializeObject<DeployResponse>(reply);
             }
+            else
+            {
+                httpResponse.EnsureSuccessStatusCode();
+            }
+
+            return response;
         }
 
         private const string deploysQueryApiPath = @"deploys/";
@@ -242,30 +230,26 @@ namespace Rollbar
         {
             Assumption.AssertNotNullOrWhiteSpace(readAccessToken, nameof(readAccessToken));
 
-            using (var httpClient = this.BuildWebClient())
+            var uri = new Uri(
+                this.Config.EndPoint
+                + RollbarClient.deploysQueryApiPath
+                + $"?access_token={readAccessToken}&page={pageNumber}"
+                );
+
+            var httpResponse = await HttpClient.GetAsync(uri);
+
+            DeploysPageResponse response = null;
+            if (httpResponse.IsSuccessStatusCode)
             {
-                var uri = new Uri(
-                    this.Config.EndPoint 
-                    + RollbarClient.deploysQueryApiPath
-                    + $"?access_token={readAccessToken}&page={pageNumber}"
-                    );
-
-                var httpResponse = await httpClient.GetAsync(uri);
-
-                DeploysPageResponse response = null;
-                if (httpResponse.IsSuccessStatusCode)
-                {
-                    string reply = await httpResponse.Content.ReadAsStringAsync();
-                    response = JsonConvert.DeserializeObject<DeploysPageResponse>(reply);
-                }
-                else
-                {
-                    httpResponse.EnsureSuccessStatusCode();
-                }
-
-                return response;
+                string reply = await httpResponse.Content.ReadAsStringAsync();
+                response = JsonConvert.DeserializeObject<DeploysPageResponse>(reply);
             }
-        }
+            else
+            {
+                httpResponse.EnsureSuccessStatusCode();
+            }
 
+            return response;
+        }
     }
 }

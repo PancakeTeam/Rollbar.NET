@@ -5,4 +5,4 @@ dotnet_csproj:
   version: '{version}'
   package_version: '{version}'
 before_build:
-  - dotnet restore
+  - dotnet restore Rollbar.sln

@@ -317,6 +317,11 @@
         public IpAddressCollectionPolicy IpAddressCollectionPolicy { get; set; }
 
         /// <summary>
+        /// Specifies a duration after which requests to Rollbar API are being cancelled.
+        /// </summary>
+        public TimeSpan? ClientRequestsTimeout { get; set; }
+
+        /// <summary>
         /// Traces as a string.
         /// </summary>
         /// <param name="indent">The indent.</param>
@@ -339,6 +344,7 @@
             sb.AppendLine(indent + "  MaxReportsPerMinute: " + this.MaxReportsPerMinute);
             sb.AppendLine(indent + "  IpAddressCollectionPolicy: " + this.IpAddressCollectionPolicy);
             sb.AppendLine(indent + "  PersonDataCollectionPolicies: " + this.PersonDataCollectionPolicies);
+            sb.AppendLine(indent + "  ClientRequestsTimeout: " + this.ClientRequestsTimeout);
             //sb.AppendLine(indent + this.Result.Trace(indent + "  "));
             return sb.ToString();
         }
@@ -364,5 +370,44 @@
             return this.ScrubFields.Where(i => !whitelist.Contains(i)).ToArray();
         }
 
+        protected bool Equals(RollbarConfig other)
+        {
+            return Equals(_logger, other._logger) && string.Equals(AccessToken, other.AccessToken) && string.Equals(EndPoint, other.EndPoint) && Equals(ScrubFields, other.ScrubFields) && Equals(ScrubWhitelistFields, other.ScrubWhitelistFields) && LogLevel == other.LogLevel && Enabled == other.Enabled && string.Equals(Environment, other.Environment) && Equals(CheckIgnore, other.CheckIgnore) && Equals(Transform, other.Transform) && Equals(Truncate, other.Truncate) && Equals(Server, other.Server) && Equals(Person, other.Person) && string.Equals(ProxyAddress, other.ProxyAddress) && MaxReportsPerMinute == other.MaxReportsPerMinute && ReportingQueueDepth == other.ReportingQueueDepth && PersonDataCollectionPolicies == other.PersonDataCollectionPolicies && IpAddressCollectionPolicy == other.IpAddressCollectionPolicy && ClientRequestsTimeout.Equals(other.ClientRequestsTimeout);
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (ReferenceEquals(null, obj)) return false;
+            if (ReferenceEquals(this, obj)) return true;
+            if (obj.GetType() != this.GetType()) return false;
+            return Equals((RollbarConfig) obj);
+        }
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                var hashCode = (_logger != null ? _logger.GetHashCode() : 0);
+                hashCode = (hashCode * 397) ^ (AccessToken != null ? AccessToken.GetHashCode() : 0);
+                hashCode = (hashCode * 397) ^ (EndPoint != null ? EndPoint.GetHashCode() : 0);
+                hashCode = (hashCode * 397) ^ (ScrubFields != null ? ScrubFields.GetHashCode() : 0);
+                hashCode = (hashCode * 397) ^ (ScrubWhitelistFields != null ? ScrubWhitelistFields.GetHashCode() : 0);
+                hashCode = (hashCode * 397) ^ LogLevel.GetHashCode();
+                hashCode = (hashCode * 397) ^ Enabled.GetHashCode();
+                hashCode = (hashCode * 397) ^ (Environment != null ? Environment.GetHashCode() : 0);
+                hashCode = (hashCode * 397) ^ (CheckIgnore != null ? CheckIgnore.GetHashCode() : 0);
+                hashCode = (hashCode * 397) ^ (Transform != null ? Transform.GetHashCode() : 0);
+                hashCode = (hashCode * 397) ^ (Truncate != null ? Truncate.GetHashCode() : 0);
+                hashCode = (hashCode * 397) ^ (Server != null ? Server.GetHashCode() : 0);
+                hashCode = (hashCode * 397) ^ (Person != null ? Person.GetHashCode() : 0);
+                hashCode = (hashCode * 397) ^ (ProxyAddress != null ? ProxyAddress.GetHashCode() : 0);
+                hashCode = (hashCode * 397) ^ MaxReportsPerMinute;
+                hashCode = (hashCode * 397) ^ ReportingQueueDepth;
+                hashCode = (hashCode * 397) ^ (int) PersonDataCollectionPolicies;
+                hashCode = (hashCode * 397) ^ (int) IpAddressCollectionPolicy;
+                hashCode = (hashCode * 397) ^ ClientRequestsTimeout.GetHashCode();
+                return hashCode;
+            }
+        }
     }
 }

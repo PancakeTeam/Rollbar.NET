@@ -148,5 +148,10 @@
         /// The IP address collection policy.
         /// </value>
         IpAddressCollectionPolicy IpAddressCollectionPolicy { get; set; }
+
+        /// <summary>
+        /// Specifies a duration after which requests to Rollbar API are being cancelled.
+        /// </summary>
+        TimeSpan? ClientRequestsTimeout { get; set; }
     }
 }
